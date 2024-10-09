@@ -11,4 +11,4 @@
     1. **terraform-apply-X** Consists of 3 pipelines, 1 for each environment of Dev, Stage and Main. They will do terraform apply to create an S3 bucket, the name of the bucket will be exported as an artifact.
     1. **app-deploy-X** Consists of 3 pipelines, 1 for each environment of Dev, Stage and Main. It fetchs the bucket name from the previous `terraform apply`, in paralell it builds the artifacts of the JS application. Once both stages are done it sync the S3 bucket objects and uploads the new artifacts to deploy the new S3 website.
 
-    ![architecture](challenge%20(1).png)
+    ![architecture](challenge.png)

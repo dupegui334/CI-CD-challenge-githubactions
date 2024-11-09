@@ -1,0 +1,99 @@
+name: app apply dev
+
+on: 
+    push:
+        branches:
+          - main
+        paths:
+          - codebase/rdicidr-0.1.0/**
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: us-east-1
+
+jobs:
+      fetch-bucket:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+        
+          - name: validate aws credentials
+            run: aws sts get-caller-identity
+
+          - uses: hashicorp/setup-terraform@v3
+
+          - run: terraform init
+            working-directory: 'terraform/environment/main'
+          
+          - run: terraform output -raw bucket_name > bucket.txt
+            working-directory: 'terraform/environment/main'
+  
+          - name: Upload bucket name as artifact
+            uses: actions/upload-artifact@v4
+            with:
+              name: main-bucket
+              path: terraform/environment/main/bucket.txt
+          
+      deploy-ci:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+            - uses: actions/setup-node@v4
+              with:
+                node-version: 15
+            - run: npm -v
+
+            - name: install dependencies
+              run: npm install
+              working-directory: codebase/rdicidr-0.1.0
+
+            - name: prettier
+              run: npm run prettier
+              working-directory: codebase/rdicidr-0.1.0
+
+            - name: lint and run tests
+              run: CI=true npm run test
+              working-directory: codebase/rdicidr-0.1.0
+
+            - name: build
+              run: npm run build
+              working-directory: codebase/rdicidr-0.1.0
+
+            - name: Upload build as artifact
+              uses: actions/upload-artifact@v4
+              with:
+                name: main-build
+                path: codebase/rdicidr-0.1.0/build
+
+      Deploy-app:
+        needs: [fetch-bucket, deploy-ci]
+
+        runs-on: ubuntu-latest
+        steps:
+    
+            - uses: actions/checkout@v4
+              with:
+                fetch-depth: 0
+    
+            - uses: actions/download-artifact@v4
+              with:
+                pattern: main-*
+                path: artifacts
+    
+            - name: Display structure of downloaded files
+              run: ls -R
+              working-directory: artifacts
+    
+            - name: validate aws credentials
+              run: aws sts get-caller-identity
+    
+            - name: sync bucket
+              run: aws s3 sync main-build/ s3://$(cat main-bucket/bucket.txt)
+              working-directory: artifacts
+
+        
